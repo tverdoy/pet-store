@@ -552,6 +552,11 @@ const docTemplate = `{
         },
         "/user/logout": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
