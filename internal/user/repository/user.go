@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	sq "github.com/Masterminds/squirrel"
 	"petstore/internal/domain"
 )
@@ -35,6 +35,10 @@ func (u *userRepository) GetByUsername(ctx context.Context, username string) (*d
 	err := row.Scan(&user.Id, &user.Username, &user.FirstName,
 		&user.LastName, &user.Email, &user.Phone, &user.Password, &user.UserStatus)
 
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+
 	return user, err
 }
 
@@ -45,6 +49,10 @@ func (u *userRepository) GetIdByUsername(ctx context.Context, username string) (
 	row := query.RunWith(u.Conn).QueryRowContext(ctx)
 	var userId int
 	err := row.Scan(&userId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, domain.ErrUserNotFound
+	}
 
 	return userId, err
 }
@@ -64,7 +72,7 @@ func (u *userRepository) Update(ctx context.Context, username string, user *doma
 	res, err := query.RunWith(u.Conn).ExecContext(ctx)
 	isUpdate, _ := res.RowsAffected()
 	if isUpdate == 0 {
-		return fmt.Errorf("user not found")
+		return domain.ErrUserNotFound
 	}
 
 	return err
@@ -76,7 +84,7 @@ func (u *userRepository) Delete(ctx context.Context, username string) error {
 	res, err := query.RunWith(u.Conn).ExecContext(ctx)
 	isDelete, _ := res.RowsAffected()
 	if isDelete == 0 {
-		return fmt.Errorf("user not found")
+		return domain.ErrUserNotFound
 	}
 
 	return err

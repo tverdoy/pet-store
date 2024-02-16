@@ -9,18 +9,41 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 	"github.com/ptflp/godecoder"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os"
 	"petstore/internal/responder"
 	_userController "petstore/internal/user/controller"
+	_userMiddleware "petstore/internal/user/controller/middleware"
 	_userRepo "petstore/internal/user/repository"
 	_userUsecase "petstore/internal/user/usecase"
+
+	_petController "petstore/internal/pet/controller"
+	_petRepo "petstore/internal/pet/repository"
+	_petUsecase "petstore/internal/pet/usecase"
+
+	_orderController "petstore/internal/order/controller"
+	_orderRepo "petstore/internal/order/repository"
+	_orderUsecase "petstore/internal/order/usecase"
+
 	"time"
 
 	_ "github.com/lib/pq"
+	_ "petstore/internal/docs"
 )
+
+//	@title			PetStore
+//	@version		1.0
+//	@description	This is implementation of PetStore API
+//
+// @securitydefinitions.apikey ApiKeyAuth
+// @in Login
+// @name Authorization
+//
+//	@host		localhost:8080
+//	@BasePath	/
 
 func RunApp() {
 	err := godotenv.Load()
@@ -37,11 +60,38 @@ func RunApp() {
 	resp := responder.NewResponder(godecoder.NewDecoder(), zap.NewExample())
 	tokenAuth := jwtauth.New("HS256", []byte("secret"), nil, jwt.WithAcceptableSkew(30*time.Second))
 
+	userRepo := _userRepo.NewUserRepository(db)
+	auRepo := _userRepo.NewAuthRepository(db)
+	userUsecase := _userUsecase.NewUserUsecase(userRepo, auRepo, tokenAuth)
+
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
+	))
+
 	r.Group(func(r chi.Router) {
-		userRepo := _userRepo.NewUserRepository(db)
-		auRepo := _userRepo.NewAuthRepository(db)
-		userUsecase := _userUsecase.NewUserUsecase(userRepo, auRepo, tokenAuth)
 		_userController.NewUserController(r, resp, userUsecase)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(jwtauth.Verifier(tokenAuth))
+		r.Use(_userMiddleware.Authenticator(resp, userUsecase))
+
+		petRepo := _petRepo.NewPetRepository(db)
+		categoryRepo := _petRepo.NewCategoryRepository(db)
+		tagRepo := _petRepo.NewTagRepository(db)
+
+		petUsecase := _petUsecase.NewPetUsecase(petRepo, categoryRepo, tagRepo)
+		_petController.NewPetController(r, resp, petUsecase)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(jwtauth.Verifier(tokenAuth))
+		r.Use(_userMiddleware.Authenticator(resp, userUsecase))
+
+		orderRepo := _orderRepo.NewOrderRepository(db)
+		orderUsecase := _orderUsecase.NewOrderUsecase(orderRepo)
+
+		_orderController.NewOrderController(r, resp, orderUsecase)
 	})
 
 	log.Println("server starting...")

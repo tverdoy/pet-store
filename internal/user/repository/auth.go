@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	sq "github.com/Masterminds/squirrel"
 	"petstore/internal/domain"
 )
@@ -36,16 +37,30 @@ func (a *authRepository) UnregisterSession(ctx context.Context, sessionId int) e
 
 func (a *authRepository) UnregisterAllSession(ctx context.Context, userId int) error {
 	query := a.SqlBuilder.Delete("auth").Where(sq.Eq{"user_id": userId})
-	_, err := query.RunWith(a.Conn).ExecContext(ctx)
+	res, err := query.RunWith(a.Conn).ExecContext(ctx)
+
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		if err != nil {
+			return err
+		} else {
+			return domain.ErrSessionNotFound
+		}
+	}
 
 	return err
 }
 
+// ExistsSession checks if a session exists.
+// Returns (false, nil) if no session is found.
 func (a *authRepository) ExistsSession(ctx context.Context, sessionId int) (bool, error) {
 	query := a.SqlBuilder.Select("id").From("auth").Where(sq.Eq{"id": sessionId})
 	row := query.RunWith(a.Conn).QueryRowContext(ctx)
 	var id int
 	err := row.Scan(&id)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
 
 	return err == nil, err
 }
