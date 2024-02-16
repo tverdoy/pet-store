@@ -1,6 +1,13 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"errors"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+)
+
+var ErrUserNotFound = errors.New("user not found")
+var ErrSessionNotFound = errors.New("session not found")
 
 type User struct {
 	Id         int    `json:"id"`
@@ -21,7 +28,7 @@ type UserUsecase interface {
 	CreateList(ctx context.Context, users []*User) error
 	Login(ctx context.Context, username string, password string) (string, error)
 	Logout(ctx context.Context, token string) error
-	IsAuthenticated(ctx context.Context, token string) (bool, error)
+	IsAuthenticated(ctx context.Context, token jwt.Token) (bool, error)
 }
 
 type UserRepository interface {

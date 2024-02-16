@@ -23,11 +23,25 @@ type Responder interface {
 	ErrorBadRequest(w http.ResponseWriter, err error)
 	ErrorForbidden(w http.ResponseWriter, err error)
 	ErrorInternal(w http.ResponseWriter, err error)
+	ErrorNotFound(w http.ResponseWriter, err error)
 }
 
 type Respond struct {
 	log *zap.Logger
 	godecoder.Decoder
+}
+
+func (r *Respond) ErrorNotFound(w http.ResponseWriter, err error) {
+	r.log.Info("http response not found status code", zap.Error(err))
+	w.Header().Set("Content-Type", "application/json;charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if err := r.Encode(w, Response{
+		Success: false,
+		Message: err.Error(),
+		Data:    nil,
+	}); err != nil {
+		r.log.Info("response writer error on write", zap.Error(err))
+	}
 }
 
 func NewResponder(decoder godecoder.Decoder, logger *zap.Logger) Responder {
@@ -55,7 +69,7 @@ func (r *Respond) ErrorBadRequest(w http.ResponseWriter, err error) {
 }
 
 func (r *Respond) ErrorForbidden(w http.ResponseWriter, err error) {
-	r.log.Warn("http resposne forbidden", zap.Error(err))
+	r.log.Warn("http response forbidden", zap.Error(err))
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
 	if err := r.Encode(w, Response{
@@ -68,7 +82,7 @@ func (r *Respond) ErrorForbidden(w http.ResponseWriter, err error) {
 }
 
 func (r *Respond) ErrorUnauthorized(w http.ResponseWriter, err error) {
-	r.log.Warn("http resposne Unauthorized", zap.Error(err))
+	r.log.Warn("http response Unauthorized", zap.Error(err))
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)
 	if err := r.Encode(w, Response{

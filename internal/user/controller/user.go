@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/jwtauth/v5"
@@ -17,17 +18,28 @@ type UserController struct {
 
 func NewUserController(r chi.Router, resp responder.Responder, us domain.UserUsecase) {
 	u := UserController{userUsecase: us, responder: resp}
+	r.Route("/user", func(r chi.Router) {
+		r.Post("/login", u.Login)
+		r.Get("/logout", u.Logout)
+		r.Post("/createWithList", u.CreateWithList)
 
-	r.Post("/user", u.Create)
-	r.Get("/user/{username}", u.Get)
-	r.Put("/user/{username}", u.Update)
-	r.Delete("/user/{username}", u.Delete)
-	r.Post("/user/createWithList", u.CreateWithList)
-
-	r.Post("/user/login", u.Login)
-	r.Get("/user/logout", u.Logout)
+		r.Post("/", u.Create)
+		r.Get("/{username}", u.Get)
+		r.Put("/{username}", u.Update)
+		r.Delete("/{username}", u.Delete)
+	})
 }
 
+// Create this function creates a new user
+//
+// @Summary		Create a new user
+// @Tags		user
+// @Accept		json
+// @Produce		json
+// @Param		pet		body		domain.User			true	"User to add to the store"
+// @Success		200		{string}	string				"User created"
+// @Failure		400		{string}	string				"Invalid input"
+// @Router		/user 	[post]
 func (u *UserController) Create(w http.ResponseWriter, r *http.Request) {
 	var userInput domain.User
 	if err := json.NewDecoder(r.Body).Decode(&userInput); err != nil {
@@ -47,6 +59,18 @@ func (u *UserController) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Get this function is used to get a user
+//
+// @Summary		Get user by username
+// @Tags		user
+// @Produce		json
+//
+// @Param		username path		string				true	"Username of user to return"
+//
+// @Success		200		{object}	domain.User			"Find user by Username"
+// @Failure		400		{string}	string				"Invalid input"
+// @Failure		404		{string}	string				"User not found"
+// @Router		/user/{username} 		[get]
 func (u *UserController) Get(w http.ResponseWriter, r *http.Request) {
 	username := chi.URLParam(r, "username")
 	if username == "" {
@@ -73,6 +97,19 @@ func (u *UserController) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Update this function is used to update a user
+//
+// @Summary		Update a user with form data
+// @Tags		user
+// @Accept		json
+// @Produce		json
+//
+// @Param		user	body		domain.User			true	"User object that needs to update"
+//
+// @Success		200		{string}	string				"User updated"
+// @Failure		400		{string}	string				"Invalid input"
+// @Failure		404		{string}	string				"User not found"
+// @Router		/user 	[put]
 func (u *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	username := chi.URLParam(r, "username")
 	if username == "" {
@@ -87,8 +124,11 @@ func (u *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := u.userUsecase.Update(r.Context(), username, &userInput); err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		u.responder.ErrorInternal(w, err)
+		if errors.Is(err, domain.ErrUserNotFound) {
+			u.responder.ErrorNotFound(w, err)
+		} else {
+			u.responder.ErrorInternal(w, err)
+		}
 		return
 	}
 
@@ -99,6 +139,18 @@ func (u *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Delete this function is used to delete a user.
+//
+// @Summary		Delete a user by username
+// @Tags		user
+// @Produce		json
+//
+// @Param		username path		string				true	"Username of user to delete"
+//
+// @Success		200		{string}	string				"User deleted"
+// @Failure		400		{string}	string				"Invalid input"
+// @Failure		404		{string}	string				"User not found"
+// @Router		/user/{username} 	[delete]
 func (u *UserController) Delete(w http.ResponseWriter, r *http.Request) {
 	username := chi.URLParam(r, "username")
 	if username == "" {
@@ -108,13 +160,11 @@ func (u *UserController) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err := u.userUsecase.Delete(r.Context(), username)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		u.responder.OutputJSON(w, responder.Response{
-			Success: false,
-			Message: "user not found",
-			Data:    nil,
-		})
-
+		if errors.Is(err, domain.ErrUserNotFound) {
+			u.responder.ErrorNotFound(w, err)
+		} else {
+			u.responder.ErrorInternal(w, err)
+		}
 		return
 	}
 
@@ -125,6 +175,17 @@ func (u *UserController) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateWithList this function creates a new users
+//
+// @Summary		Create a list of new users
+// @Tags		user
+// @Accept		json
+// @Produce		json
+// @Param		users		body		[]domain.User		true	"Users to add to the store"
+// @Success		200		{string}	string				"Users created"
+// @Failure		400		{string}	string				"Invalid input"
+// @Failure		404		{string}	string				"User not found"
+// @Router		/user/createWithList	[post]
 func (u *UserController) CreateWithList(w http.ResponseWriter, r *http.Request) {
 	var userInput []*domain.User
 	if err := json.NewDecoder(r.Body).Decode(&userInput); err != nil {
@@ -149,6 +210,17 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// Login this function login a user
+//
+// @Summary		Login a user
+// @Tags		user
+// @Accept		json
+// @Produce		json
+// @Param		credentials			body				LoginRequest		true	"User credentials"
+// @Success		200		{string}	string				"User login"
+// @Failure		400		{string}	string				"Invalid input"
+// @Failure		404		{string}	string				"User not found"
+// @Router		/user/login			[post]
 func (u *UserController) Login(w http.ResponseWriter, r *http.Request) {
 	var loginInput LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginInput); err != nil {
@@ -169,6 +241,18 @@ func (u *UserController) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Logout this function logout a user
+//
+// @Summary		Logout a user
+// @Tags		user
+// @Security 	ApiKeyAuth
+// @Accept		json
+// @Produce		json
+//
+// @Success		200		{string}	string				"User logout"
+//
+// @Failure		400		{string}	string				"Invalid input"
+// @Router		/user/logout		[get]
 func (u *UserController) Logout(w http.ResponseWriter, r *http.Request) {
 	token := jwtauth.TokenFromHeader(r)
 	if token == "" {

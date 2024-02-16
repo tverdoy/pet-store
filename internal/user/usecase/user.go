@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 	"golang.org/x/crypto/bcrypt"
 	"petstore/internal/domain"
 )
@@ -107,16 +108,11 @@ func (u *userUsecase) Logout(ctx context.Context, token string) error {
 	return u.authRepo.UnregisterSession(ctx, int(sessionId.(float64)))
 }
 
-func (u *userUsecase) IsAuthenticated(ctx context.Context, token string) (bool, error) {
-	decodeToken, err := u.jwtAuth.Decode(token)
-	if err != nil {
-		return false, err
-	}
-
-	sessionId, ok := decodeToken.Get("session_id")
+func (u *userUsecase) IsAuthenticated(ctx context.Context, token jwt.Token) (bool, error) {
+	sessionId, ok := token.Get("session_id")
 	if !ok {
 		return false, fmt.Errorf("session_id not found")
 	}
 
-	return u.authRepo.ExistsSession(ctx, sessionId.(int))
+	return u.authRepo.ExistsSession(ctx, int(sessionId.(float64)))
 }
