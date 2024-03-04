@@ -44,7 +44,6 @@ import (
 //
 //	@host		localhost:8080
 //	@BasePath	/
-
 func RunApp() {
 	err := godotenv.Load()
 
